@@ -1,31 +1,20 @@
 #include <iostream>
-#include <vector>
-#include "../include/Record.hpp"
-#include "../include/BSTIndex.hpp"
+#include "../include/TaskScheduler.hpp"
 
 class NexusStorageEngine {
 private:
-    BSTIndex treeIndex;
+    TaskScheduler scheduler;
 
 public:
-    void insertRecord(int id, const std::string& key, double value) {
-        treeIndex.insert(id, key, value);
+    void scheduleMaintenance(int priority, const std::string& name, const std::string& details) {
+        scheduler.scheduleTask(priority, name, details);
     }
 
-    void displayInOrder() const {
-        treeIndex.printSorted();
-    }
-
-    void executeRangeQuery(int minId, int maxId) const {
-        std::cout << "=== Executing Range Query: IDs [" << minId << " to " << maxId << "] ===" << std::endl;
-        std::vector<Record> matches = treeIndex.rangeQuery(minId, maxId);
-        
-        if (matches.empty()) {
-            std::cout << "No records found in range." << std::endl;
-        } else {
-            for (const auto& r : matches) {
-                r.print();
-            }
+    void runMaintenanceCycle() {
+        std::cout << "\n=== Running Engine Maintenance Cycle (" 
+                  << scheduler.pendingTaskCount() << " pending) ===" << std::endl;
+        while (scheduler.hasPendingTasks()) {
+            scheduler.executeNextTask();
         }
         std::cout << "=========================================================\n" << std::endl;
     }
@@ -34,19 +23,15 @@ public:
 int main() {
     NexusStorageEngine engine;
 
-    std::cout << "=== Phase 1: Populating Hierarchical BST Index ===" << std::endl;
-    engine.insertRecord(300, "db_port", 5432.0);
-    engine.insertRecord(150, "max_conn", 100.0);
-    engine.insertRecord(450, "cache_size", 512.0);
-    engine.insertRecord(100, "timeout", 30.0);
-    engine.insertRecord(200, "retry_count", 3.0);
+    std::cout << "=== Phase 1: Scheduling Tasks with Varied Priorities ===" << std::endl;
+    // Pushing tasks out of order
+    engine.scheduleMaintenance(2, "Routine Index Cleanup", "Rebuilding fragmented indices");
+    engine.scheduleMaintenance(10, "WAL Flush", "Flushing write-ahead log to persistent storage");
+    engine.scheduleMaintenance(5, "Cache Eviction", "Clearing stale query cache entries");
+    engine.scheduleMaintenance(1, "Log Archiving", "Archiving log history to secondary disk");
 
-    // Display elements automatically sorted via in-order traversal
-    engine.displayInOrder();
-
-    std::cout << "=== Phase 2: Range Query Filtering ===" << std::endl;
-    // Retrieve records with ID between 120 and 350
-    engine.executeRangeQuery(120, 350);
+    // Execution order should follow priority scores: 10 -> 5 -> 2 -> 1
+    engine.runMaintenanceCycle();
 
     return 0;
 }
