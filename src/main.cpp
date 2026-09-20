@@ -1,83 +1,55 @@
 #include <iostream>
-#include <vector>
-#include <algorithm>
 #include "../include/Record.hpp"
-#include "../include/CommandEngine.hpp"
+#include "../include/KeyIndex.hpp"
 
 class NexusStorageEngine {
 private:
-    std::vector<Record> storageBuffer;
-    CommandEngine commandPipeline;
+    KeyIndex indexEngine;
 
 public:
-    // Step 1: Submit client requests to the Queue
-    void submitRequest(const std::string& type, int id, const std::string& key, double value) {
-        commandPipeline.enqueueCommand(type, id, key, value);
+    void set(const std::string& key, int id, double value) {
+        indexEngine.insertOrUpdate(key, id, value);
     }
 
-    // Step 2: Process queued requests sequentially (FIFO)
-    void processNextCommand() {
-        if (!commandPipeline.hasPendingCommands()) {
-            std::cout << "[NexusEngine] No pending commands in queue." << std::endl;
-            return;
-        }
-
-        Command cmd = commandPipeline.getNextCommand();
-        std::cout << "\n[Engine Processing] Executing " << cmd.type << " for ID: " << cmd.recordId << std::endl;
-
-        if (cmd.type == "INSERT") {
-            storageBuffer.emplace_back(cmd.recordId, cmd.key, cmd.value);
-            // Push reverse action (REMOVE) to Undo Stack
-            commandPipeline.pushRollbackAction("REMOVE_RECORD", cmd.recordId, cmd.key, cmd.value);
+    void get(const std::string& key) const {
+        Record rec(0, "", 0.0);
+        if (indexEngine.findKey(key, rec)) {
+            std::cout << "[NexusEngine Cache Hit] ";
+            rec.print();
+        } else {
+            std::cout << "[NexusEngine Cache Miss] Key '" << key << "' does not exist." << std::endl;
         }
     }
 
-    // Step 3: Undo last executed action (LIFO)
-    void rollbackLastAction() {
-        if (!commandPipeline.canRollback()) {
-            std::cout << "[NexusEngine] Nothing to rollback." << std::endl;
-            return;
-        }
-
-        RollbackAction action = commandPipeline.popRollbackAction();
-        std::cout << "\n[Engine Rollback] Undoing action for ID: " << action.recordId << "..." << std::endl;
-
-        if (action.reverseType == "REMOVE_RECORD") {
-            storageBuffer.erase(
-                std::remove_if(storageBuffer.begin(), storageBuffer.end(),
-                    [action](const Record& r) { return r.id == action.recordId; }),
-                storageBuffer.end()
-            );
-            std::cout << "[Engine Rollback] Record ID " << action.recordId << " removed successfully." << std::endl;
+    void remove(const std::string& key) {
+        if (!indexEngine.removeKey(key)) {
+            std::cout << "[NexusEngine] Failed to delete key '" << key << "'. Not found." << std::endl;
         }
     }
 
-    void displayAll() const {
-        std::cout << "\n--- Current Storage Buffer State (" << storageBuffer.size() << " records) ---" << std::endl;
-        for (const auto& r : storageBuffer) {
-            r.print();
-        }
-        std::cout << "---------------------------------------------------------\n" << std::endl;
+    void showIndex() const {
+        indexEngine.displayIndexStats();
     }
 };
 
 int main() {
     NexusStorageEngine engine;
 
-    std::cout << "=== Phase 1: Queuing Client Requests ===" << std::endl;
-    engine.submitRequest("INSERT", 101, "cpu_usage", 45.2);
-    engine.submitRequest("INSERT", 102, "memory_usage", 78.9);
+    std::cout << "=== Phase 1: Fast O(1) Key-Value Insertions ===" << std::endl;
+    engine.set("cpu_usage", 101, 45.2);
+    engine.set("memory_usage", 102, 78.9);
+    engine.set("disk_io", 103, 112.4);
 
-    std::cout << "\n=== Phase 2: Processing Queue (FIFO) ===" << std::endl;
-    engine.processNextCommand(); // Executes 101
-    engine.processNextCommand(); // Executes 102
+    engine.showIndex();
 
-    engine.displayAll();
+    std::cout << "=== Phase 2: O(1) Direct Key Lookups ===" << std::endl;
+    engine.get("memory_usage"); // Cache hit
+    engine.get("network_out");  // Cache miss
 
-    std::cout << "=== Phase 3: Rolling Back Transactions (LIFO Stack) ===" << std::endl;
-    engine.rollbackLastAction(); // Undoes ID 102 (most recent)
+    std::cout << "\n=== Phase 3: O(1) Key Deletion ===" << std::endl;
+    engine.remove("cpu_usage");
 
-    engine.displayAll();
+    engine.showIndex();
 
     return 0;
 }
