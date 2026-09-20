@@ -1,48 +1,63 @@
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include <stdexcept>
 #include "../include/Record.hpp"
 
 class NexusStorageEngine {
 private:
-    std::vector<Record> storageBuffer; // Dynamic memory buffer
+    std::vector<Record> storageBuffer;
+    bool isSorted = false; // Tracks if buffer is currently sorted by ID
 
 public:
-    // Append to end: O(1) amortized
     void pushBack(int id, const std::string& key, double value) {
         storageBuffer.emplace_back(id, key, value);
-        std::cout << "[NexusEngine] Appended record ID " << id << std::endl;
+        isSorted = false; // New un-sorted element added
     }
 
-    // Insert at specific index: O(n) due to element shift
-    void insertAtIndex(size_t index, int id, const std::string& key, double value) {
-        if (index > storageBuffer.size()) {
-            throw std::out_of_range("Index out of bounds for insertion.");
+    // Helper: Sort records by ID to enable Binary Search
+    void sortById() {
+        std::sort(storageBuffer.begin(), storageBuffer.end(), 
+            [](const Record& a, const Record& b) {
+                return a.id < b.id;
+            });
+        isSorted = true;
+        std::cout << "[NexusEngine] Storage buffer sorted by ID." << std::endl;
+    }
+
+    // 1. Linear Search: O(n) - Works on unsorted data
+    int linearSearchById(int targetId) const {
+        for (size_t i = 0; i < storageBuffer.size(); ++i) {
+            if (storageBuffer[i].id == targetId) {
+                return static_cast<int>(i); // Found index
+            }
         }
-        storageBuffer.emplace(storageBuffer.begin() + index, id, key, value);
-        std::cout << "[NexusEngine] Inserted record ID " << id << " at index " << index << std::endl;
+        return -1; // Not found
     }
 
-    // Delete at specific index: O(n) due to element shift
-    void deleteAtIndex(size_t index) {
-        if (index >= storageBuffer.size()) {
-            throw std::out_of_range("Index out of bounds for deletion.");
+    // 2. Binary Search: O(log n) - Requires sorted data
+    int binarySearchById(int targetId) {
+        if (!isSorted) {
+            sortById(); // Ensure sorted state before search
         }
-        int deletedId = storageBuffer[index].id;
-        storageBuffer.erase(storageBuffer.begin() + index);
-        std::cout << "[NexusEngine] Deleted record ID " << deletedId << " at index " << index << std::endl;
-    }
 
-    // Read by index: O(1) random access
-    const Record& getRecord(size_t index) const {
-        if (index >= storageBuffer.size()) {
-            throw std::out_of_range("Index out of bounds.");
+        int low = 0;
+        int high = static_cast<int>(storageBuffer.size()) - 1;
+
+        while (low <= high) {
+            int mid = low + (high - low) / 2; // Avoid potential integer overflow
+
+            if (storageBuffer[mid].id == targetId) {
+                return mid; // Found index
+            }
+            if (storageBuffer[mid].id < targetId) {
+                low = mid + 1; // Search right half
+            } else {
+                high = mid - 1; // Search left half
+            }
         }
-        return storageBuffer[index];
-    }
 
-    size_t size() const {
-        return storageBuffer.size();
+        return -1; // Not found
     }
 
     void displayAll() const {
@@ -56,28 +71,31 @@ public:
 };
 
 int main() {
-    try {
-        NexusStorageEngine engine;
+    NexusStorageEngine engine;
 
-        // Populating dynamic memory
-        engine.pushBack(101, "cpu_usage", 45.2);
-        engine.pushBack(103, "disk_io", 120.4);
+    // Populating unsorted IDs
+    engine.pushBack(405, "network_out", 1024.5);
+    engine.pushBack(101, "cpu_usage", 45.2);
+    engine.pushBack(302, "disk_io", 88.1);
+    engine.pushBack(204, "memory_usage", 78.9);
 
-        // Insert in middle (index 1)
-        engine.insertAtIndex(1, 102, "memory_usage", 78.9);
-        engine.displayAll();
+    engine.displayAll();
 
-        // Delete element at index 0
-        engine.deleteAtIndex(0);
-        engine.displayAll();
-
-        // Direct lookup via O(1) access
-        std::cout << "Accessing Index 0 directly:" << std::endl;
-        engine.getRecord(0).print();
-
-    } catch (const std::exception& e) {
-        std::cerr << "[Error] Exception caught: " << e.what() << std::endl;
+    // Perform Linear Search on unsorted data
+    std::cout << "--- Testing Linear Search O(n) ---" << std::endl;
+    int idx1 = engine.linearSearchById(302);
+    if (idx1 != -1) {
+        std::cout << "Linear Search found ID 302 at index: " << idx1 << std::endl;
     }
+
+    // Perform Binary Search (triggers auto-sort first)
+    std::cout << "\n--- Testing Binary Search O(log n) ---" << std::endl;
+    int idx2 = engine.binarySearchById(302);
+    if (idx2 != -1) {
+        std::cout << "Binary Search found ID 302 at index: " << idx2 << std::endl;
+    }
+
+    engine.displayAll();
 
     return 0;
 }
