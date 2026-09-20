@@ -7,57 +7,88 @@
 class NexusStorageEngine {
 private:
     std::vector<Record> storageBuffer;
-    bool isSorted = false; // Tracks if buffer is currently sorted by ID
+    bool isSorted = false;
+
+    // --- Merge Sort Helper Methods ---
+    void merge(std::vector<Record>& arr, int left, int mid, int right) {
+        int n1 = mid - left + 1;
+        int n2 = right - mid;
+
+        std::vector<Record> L, R;
+        L.reserve(n1);
+        R.reserve(n2);
+
+        for (int i = 0; i < n1; ++i) L.push_back(arr[left + i]);
+        for (int j = 0; j < n2; ++j) R.push_back(arr[mid + 1 + j]);
+
+        int i = 0, j = 0, k = left;
+        while (i < n1 && j < n2) {
+            if (L[i].id <= R[j].id) {
+                arr[k] = L[i];
+                i++;
+            } else {
+                arr[k] = R[j];
+                j++;
+            }
+            k++;
+        }
+
+        while (i < n1) arr[k++] = L[i++];
+        while (j < n2) arr[k++] = R[j++];
+    }
+
+    void mergeSortRecursive(std::vector<Record>& arr, int left, int right) {
+        if (left < right) {
+            int mid = left + (right - left) / 2;
+            mergeSortRecursive(arr, left, mid);
+            mergeSortRecursive(arr, mid + 1, right);
+            merge(arr, left, mid, right);
+        }
+    }
+
+    // --- Quick Sort Helper Methods ---
+    int partition(std::vector<Record>& arr, int low, int high) {
+        int pivotId = arr[high].id;
+        int i = low - 1;
+
+        for (int j = low; j < high; ++j) {
+            if (arr[j].id < pivotId) {
+                i++;
+                std::swap(arr[i], arr[j]);
+            }
+        }
+        std::swap(arr[i + 1], arr[high]);
+        return i + 1;
+    }
+
+    void quickSortRecursive(std::vector<Record>& arr, int low, int high) {
+        if (low < high) {
+            int pi = partition(arr, low, high);
+            quickSortRecursive(arr, low, pi - 1);
+            quickSortRecursive(arr, pi + 1, high);
+        }
+    }
 
 public:
     void pushBack(int id, const std::string& key, double value) {
         storageBuffer.emplace_back(id, key, value);
-        isSorted = false; // New un-sorted element added
+        isSorted = false;
     }
 
-    // Helper: Sort records by ID to enable Binary Search
-    void sortById() {
-        std::sort(storageBuffer.begin(), storageBuffer.end(), 
-            [](const Record& a, const Record& b) {
-                return a.id < b.id;
-            });
+    // Custom Merge Sort Trigger
+    void sortWithMergeSort() {
+        if (storageBuffer.empty()) return;
+        mergeSortRecursive(storageBuffer, 0, static_cast<int>(storageBuffer.size()) - 1);
         isSorted = true;
-        std::cout << "[NexusEngine] Storage buffer sorted by ID." << std::endl;
+        std::cout << "[NexusEngine] Storage buffer sorted using Merge Sort O(n log n)." << std::endl;
     }
 
-    // 1. Linear Search: O(n) - Works on unsorted data
-    int linearSearchById(int targetId) const {
-        for (size_t i = 0; i < storageBuffer.size(); ++i) {
-            if (storageBuffer[i].id == targetId) {
-                return static_cast<int>(i); // Found index
-            }
-        }
-        return -1; // Not found
-    }
-
-    // 2. Binary Search: O(log n) - Requires sorted data
-    int binarySearchById(int targetId) {
-        if (!isSorted) {
-            sortById(); // Ensure sorted state before search
-        }
-
-        int low = 0;
-        int high = static_cast<int>(storageBuffer.size()) - 1;
-
-        while (low <= high) {
-            int mid = low + (high - low) / 2; // Avoid potential integer overflow
-
-            if (storageBuffer[mid].id == targetId) {
-                return mid; // Found index
-            }
-            if (storageBuffer[mid].id < targetId) {
-                low = mid + 1; // Search right half
-            } else {
-                high = mid - 1; // Search left half
-            }
-        }
-
-        return -1; // Not found
+    // Custom Quick Sort Trigger
+    void sortWithQuickSort() {
+        if (storageBuffer.empty()) return;
+        quickSortRecursive(storageBuffer, 0, static_cast<int>(storageBuffer.size()) - 1);
+        isSorted = true;
+        std::cout << "[NexusEngine] Storage buffer sorted using Quick Sort O(n log n)." << std::endl;
     }
 
     void displayAll() const {
@@ -73,28 +104,26 @@ public:
 int main() {
     NexusStorageEngine engine;
 
-    // Populating unsorted IDs
-    engine.pushBack(405, "network_out", 1024.5);
-    engine.pushBack(101, "cpu_usage", 45.2);
-    engine.pushBack(302, "disk_io", 88.1);
-    engine.pushBack(204, "memory_usage", 78.9);
+    // Populating unsorted records
+    engine.pushBack(500, "network_in", 512.0);
+    engine.pushBack(120, "cpu_load", 12.5);
+    engine.pushBack(340, "gpu_temp", 68.2);
+    engine.pushBack(210, "disk_read", 99.4);
 
     engine.displayAll();
 
-    // Perform Linear Search on unsorted data
-    std::cout << "--- Testing Linear Search O(n) ---" << std::endl;
-    int idx1 = engine.linearSearchById(302);
-    if (idx1 != -1) {
-        std::cout << "Linear Search found ID 302 at index: " << idx1 << std::endl;
-    }
+    // Sorting via Merge Sort
+    std::cout << "--- Sorting via Merge Sort ---" << std::endl;
+    engine.sortWithMergeSort();
+    engine.displayAll();
 
-    // Perform Binary Search (triggers auto-sort first)
-    std::cout << "\n--- Testing Binary Search O(log n) ---" << std::endl;
-    int idx2 = engine.binarySearchById(302);
-    if (idx2 != -1) {
-        std::cout << "Binary Search found ID 302 at index: " << idx2 << std::endl;
-    }
+    // Adding more records to reset sorted flag
+    engine.pushBack(050, "fan_speed", 2200.0);
+    engine.pushBack(280, "ram_usage", 44.1);
 
+    // Sorting via Quick Sort
+    std::cout << "--- Sorting via Quick Sort ---" << std::endl;
+    engine.sortWithQuickSort();
     engine.displayAll();
 
     return 0;
