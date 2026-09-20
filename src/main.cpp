@@ -1,20 +1,25 @@
 #include <iostream>
-#include "../include/TaskScheduler.hpp"
+#include <vector>
+#include "../include/DependencyGraph.hpp"
 
 class NexusStorageEngine {
 private:
-    TaskScheduler scheduler;
+    DependencyGraph depEngine;
 
 public:
-    void scheduleMaintenance(int priority, const std::string& name, const std::string& details) {
-        scheduler.scheduleTask(priority, name, details);
+    void registerDependency(const std::string& prerequisite, const std::string& dependentTask) {
+        depEngine.addDependency(prerequisite, dependentTask);
     }
 
-    void runMaintenanceCycle() {
-        std::cout << "\n=== Running Engine Maintenance Cycle (" 
-                  << scheduler.pendingTaskCount() << " pending) ===" << std::endl;
-        while (scheduler.hasPendingTasks()) {
-            scheduler.executeNextTask();
+    void executePipeline() {
+        std::cout << "\n=== Resolving Engine Execution Order (Topological Sort) ===" << std::endl;
+        std::vector<std::string> order = depEngine.resolveExecutionOrder();
+
+        if (!order.empty()) {
+            std::cout << "\n[Pipeline Step Sequence]:" << std::endl;
+            for (size_t i = 0; i < order.size(); ++i) {
+                std::cout << " Step " << i + 1 << ": Execute -> " << order[i] << std::endl;
+            }
         }
         std::cout << "=========================================================\n" << std::endl;
     }
@@ -23,15 +28,16 @@ public:
 int main() {
     NexusStorageEngine engine;
 
-    std::cout << "=== Phase 1: Scheduling Tasks with Varied Priorities ===" << std::endl;
-    // Pushing tasks out of order
-    engine.scheduleMaintenance(2, "Routine Index Cleanup", "Rebuilding fragmented indices");
-    engine.scheduleMaintenance(10, "WAL Flush", "Flushing write-ahead log to persistent storage");
-    engine.scheduleMaintenance(5, "Cache Eviction", "Clearing stale query cache entries");
-    engine.scheduleMaintenance(1, "Log Archiving", "Archiving log history to secondary disk");
+    std::cout << "=== Phase 1: Registering Engine Task Dependencies ===" << std::endl;
+    // Task dependencies setup
+    engine.registerDependency("Init_Storage", "Load_Indexes");
+    engine.registerDependency("Load_Indexes", "Start_QueryEngine");
+    engine.registerDependency("Init_Storage", "Allocate_Buffer");
+    engine.registerDependency("Allocate_Buffer", "Start_QueryEngine");
+    engine.registerDependency("Start_QueryEngine", "Accept_Client_Connections");
 
-    // Execution order should follow priority scores: 10 -> 5 -> 2 -> 1
-    engine.runMaintenanceCycle();
+    // Execute pipeline in strictly valid dependency order
+    engine.executePipeline();
 
     return 0;
 }
